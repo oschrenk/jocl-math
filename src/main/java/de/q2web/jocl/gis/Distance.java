@@ -32,60 +32,74 @@ public class Distance {
 
 	private static final String KERNEL_SPHERICAL_DISTANCE_POINT_TO_LINE = "spherical2dPointLineDistance";
 
-	private static final String SOURCE = Resources
-			.convertStreamToString(Distance.class
-					.getResourceAsStream("distance.cl"));
+	private static final String KERNEL_HAVERSINE_DISTANCE_POINT_TO_LINE = "haversine2dPointLineDistance";
+
+	static final String SOURCE = Resources.convertStreamToString(Distance.class
+			.getResourceAsStream("distance.cl"));
 
 	public static void crossTrackEuclideanDistance(final cl_context context,
-			final cl_command_queue queue, final float[] latitudeX,
-			final float[] longitudeY, final float[] distance,
-			final float fromX, final float fromY, final float toX,
-			final float toY) {
+			final cl_command_queue queue, final float[] longitudeX,
+			final float[] latitudeY, final float[] distance, final float fromX,
+			final float fromY, final float toX, final float toY) {
 
 		abstractCrossTrackDistance(context, queue,
-				KERNEL_EUCLIDEAN_DISTANCE_POINT_TO_LINE, latitudeX, longitudeY,
+				KERNEL_EUCLIDEAN_DISTANCE_POINT_TO_LINE, longitudeX, latitudeY,
 				distance, fromX, fromY, toX, toY);
 
 	}
 
 	public static void crossTrackSphericalDistance(final cl_context context,
-			final cl_command_queue queue, final float[] latitudeX,
-			final float[] longitudeY, final float[] distance,
-			final float fromX, final float fromY, final float toX,
-			final float toY) {
+			final cl_command_queue queue, final float[] longitudeX,
+			final float[] latitudeY, final float[] distance,
+			final float fromLongitudeX, final float fromLatitudeY,
+			final float toLongitudeX, final float toLatitudeY) {
 
 		abstractCrossTrackDistance(context, queue,
-				KERNEL_SPHERICAL_DISTANCE_POINT_TO_LINE, latitudeX, longitudeY,
-				distance, fromX, fromY, toX, toY);
+				KERNEL_SPHERICAL_DISTANCE_POINT_TO_LINE, longitudeX, latitudeY,
+				distance, fromLongitudeX, fromLatitudeY, toLongitudeX,
+				toLatitudeY);
+
+	}
+
+	public static void crossTrackHaversineDistance(final cl_context context,
+			final cl_command_queue queue, final float[] longitudeX,
+			final float[] latitudeY, final float[] distance,
+			final float fromLongitudeX, final float fromLatitudeY,
+			final float toLongitudeX, final float toLatitudeY) {
+
+		abstractCrossTrackDistance(context, queue,
+				KERNEL_HAVERSINE_DISTANCE_POINT_TO_LINE, longitudeX, latitudeY,
+				distance, fromLongitudeX, fromLatitudeY, toLongitudeX,
+				toLatitudeY);
 
 	}
 
 	private static void abstractCrossTrackDistance(final cl_context context,
 			final cl_command_queue queue, final String kernel,
-			final float[] latitudeX, final float[] longitudeY,
+			final float[] longitudeX, final float[] latitudeY,
 			final float[] distance, final float fromX, final float fromY,
 			final float toX, final float toY) {
 		cl_program program = null;
 		cl_kernel distanceKernel = null;
 		cl_mem[] memObject = null;
 		try {
-			int length = latitudeX.length;
+			int length = longitudeX.length;
 			program = clCreateProgramWithSource(context, 1,
 					new String[] { SOURCE }, null, null);
 			clBuildProgram(program, 0, null, null, null, null);
 			distanceKernel = clCreateKernel(program, kernel, null);
 
-			Pointer pointerX = Pointer.to(latitudeX);
-			Pointer pointerY = Pointer.to(longitudeY);
-			Pointer pointerZ = Pointer.to(distance);
+			Pointer pointerLongitudeX = Pointer.to(longitudeX);
+			Pointer pointerLatitudeY = Pointer.to(latitudeY);
+			Pointer pointerDistance = Pointer.to(distance);
 
 			memObject = new cl_mem[3];
 			memObject[0] = clCreateBuffer(context, CL_MEM_READ_WRITE
-					| CL_MEM_COPY_HOST_PTR, Sizeof.cl_float * length, pointerX,
-					null);
+					| CL_MEM_COPY_HOST_PTR, Sizeof.cl_float * length,
+					pointerLongitudeX, null);
 			memObject[1] = clCreateBuffer(context, CL_MEM_READ_WRITE
-					| CL_MEM_COPY_HOST_PTR, Sizeof.cl_float * length, pointerY,
-					null);
+					| CL_MEM_COPY_HOST_PTR, Sizeof.cl_float * length,
+					pointerLatitudeY, null);
 			memObject[2] = clCreateBuffer(context, CL_MEM_READ_WRITE,
 					Sizeof.cl_float * length, null, null);
 
@@ -111,12 +125,14 @@ public class Distance {
 
 			// Read the output data
 			clEnqueueReadBuffer(queue, memObject[0], CL_TRUE, 0,
-					latitudeX.length * Sizeof.cl_float, pointerX, 0, null, null);
+					longitudeX.length * Sizeof.cl_float, pointerLongitudeX, 0,
+					null, null);
 			clEnqueueReadBuffer(queue, memObject[1], CL_TRUE, 0,
-					longitudeY.length * Sizeof.cl_float, pointerY, 0, null,
-					null);
+					latitudeY.length * Sizeof.cl_float, pointerLatitudeY, 0,
+					null, null);
 			clEnqueueReadBuffer(queue, memObject[2], CL_TRUE, 0,
-					distance.length * Sizeof.cl_float, pointerZ, 0, null, null);
+					distance.length * Sizeof.cl_float, pointerDistance, 0,
+					null, null);
 		} finally {
 			// Release memory objects, kernel and program
 			clReleaseMemObject(memObject[0]);

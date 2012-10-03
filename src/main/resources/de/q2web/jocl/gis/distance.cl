@@ -24,8 +24,8 @@ __kernel void euclidean2dPointLineDistance(
 }
 
 __kernel void spherical2dPointLineDistance(
-	__global const float *x,
-	__global const float *y,
+	__global const float *longitudeX,
+	__global const float *latitudeY,
 	__global float *distance,
 	const uint offset,
 	const float fromX,
@@ -38,8 +38,8 @@ __kernel void spherical2dPointLineDistance(
 
 	int tid = get_global_id(0) + offset;
 
-	float radX = radians(x[tid]);
-	float radY = radians(y[tid]);
+	float radX = radians(longitudeX[tid]);
+	float radY = radians(latitudeY[tid]);
 
 	float radFromX = radians(fromX);
 	float radFromY = radians(fromY);
@@ -91,4 +91,64 @@ __kernel void spherical2dPointLineDistance(
 	float phi = asin(sinPhi);
 
 	distance[tid] = fabs(radius * phi);
+}
+
+/**
+ * Compute orthogonal bearing
+ */
+inline float orthodromeBearing(float lon1, float lat1, float lon2, float lat2) {
+	float radLat1 = radians(lat1);
+	float radLat2 = radians(lat2);
+
+	float deltaLongitude = radians(lon2 - lon1);
+
+	float y = sin(deltaLongitude) * cos(radLat2);
+	float x = cos(radLat1) * sin(radLat2) - sin(radLat1)
+			* cos(radLat2) * cos(deltaLongitude);
+
+	return atan2(y, x);
+}
+
+inline float haversineDistance(float longitudeFrom, float latitudeFrom,
+			float longitudeTo, float latitudeTo
+) {
+	float deltaLatitude = radians(latitudeFrom - latitudeTo);
+	float deltaLongitude = radians((longitudeFrom - longitudeTo));
+
+	float sinusHalfDeltaLatitude = sin(deltaLatitude / 2);
+	float sinusHalfDeltaLongitude = sin(deltaLongitude / 2);
+
+	float a = sinusHalfDeltaLatitude * sinusHalfDeltaLatitude
+			+ cos(radians(latitudeFrom))
+			* cos(radians(latitudeTo))
+			* sinusHalfDeltaLongitude * sinusHalfDeltaLongitude;
+	float c = 2 * atan2(sqrt(a), sqrt(1 - a));
+
+	return 6371000 * c;
+	}
+
+__kernel void haversine2dPointLineDistance(
+	__global const float *longitudeX,
+	__global const float *latitudeY,
+	__global float *distance,
+	const uint offset,
+	const float fromLongitudeX,
+	const float fromLatitudeY,
+	const float toLongitudeX,
+	const float toLatitudeY
+) {
+	// earth volumetric mean radius in meter
+	float radius = 6371000;
+
+	int tid = get_global_id(0) + offset;
+	
+	
+	
+	float b12 = orthodromeBearing(fromLongitudeX, fromLatitudeY, toLongitudeX, toLatitudeY );
+	float b13 = orthodromeBearing(fromLongitudeX, fromLatitudeY, longitudeX[tid], latitudeY[tid] );
+	float d13 = haversineDistance(fromLongitudeX, fromLatitudeY, longitudeX[tid], latitudeY[tid] );
+	
+	float dt = asin( sin(d13 / radius) * sin(b13 - b12)  ) * radius;
+	
+	distance[tid] = fabs(dt);
 }
